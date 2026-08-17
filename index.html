@@ -134,6 +134,10 @@ const deflectorHot = mat(0xb8e4ff, {
   metalness: 0, roughness: 0.25, emissive: 0x8ad0ff, emissiveIntensity: 2.55,
 });
 const deflectorRim = mat(0x2a3238, { metalness: 0.08, roughness: 0.7 });
+const defR1 = mat(0x2a7cff, { metalness: 0, roughness: 0.4, emissive: 0x2a7cff, emissiveIntensity: 1.15 });
+const defR2 = mat(0x3ec8ff, { metalness: 0, roughness: 0.35, emissive: 0x3ec8ff, emissiveIntensity: 1.55 });
+const defR3 = mat(0x7aeeff, { metalness: 0, roughness: 0.3, emissive: 0x7aeeff, emissiveIntensity: 2.05 });
+const defHex = mat(0xe8ffff, { metalness: 0, roughness: 0.2, emissive: 0xe8ffff, emissiveIntensity: 3.2 });
 const grillMat = mat(0x2a2e32, { metalness: 0.08, roughness: 0.7 });
 const letterMat = mat(0x1a1c1e, { metalness: 0.04, roughness: 0.85 });
 const impulseMat = mat(0xfff4d0, {
@@ -347,28 +351,33 @@ addMesh(hull2, new THREE.BoxGeometry(0.03, 0.40, 0.06), stripeDark, 0, 0.02, 3.6
 addMesh(hull2, new THREE.BoxGeometry(0.10, 0.05, 0.04), lightBlue, -0.17, 0.12, 3.62);
 addMesh(hull2, new THREE.BoxGeometry(0.10, 0.05, 0.04), lightBlue, 0.17, 0.12, 3.62);
 
-// ---- Deflector: big recessed graphic target ----
+// ---- Deflector: recessed concentric target (front-plate lock) ----
 const dishGroup = new THREE.Group();
-dishGroup.position.set(0, 0.02, -0.38);
+dishGroup.position.set(0, 0.02, -0.48);
 
-const well = new THREE.Mesh(hard(new THREE.CylinderGeometry(0.82, 0.68, 0.24, 16, 1, true)), hullInset);
+const well = new THREE.Mesh(hard(new THREE.CylinderGeometry(0.96, 0.78, 0.38, 16, 1, true)), hullInset);
 well.rotation.x = Math.PI / 2;
-well.position.z = 0.12;
+well.position.z = 0.16;
 dishGroup.add(well);
 
-dishGroup.add(new THREE.Mesh(hard(new THREE.TorusGeometry(0.78, 0.065, 6, 16)), deflectorRim));
+dishGroup.add(new THREE.Mesh(hard(new THREE.TorusGeometry(0.90, 0.038, 6, 16)), deflectorRim));
 
-const dishOuter = new THREE.Mesh(hard(new THREE.CircleGeometry(0.70, 16)), deflectorRing);
-dishOuter.position.z = 0.02;
-dishGroup.add(dishOuter);
-
-const dishMid = new THREE.Mesh(hard(new THREE.CircleGeometry(0.42, 12)), deflectorCore);
-dishMid.position.z = 0.045;
-dishGroup.add(dishMid);
-
-const dishHex = new THREE.Mesh(hard(new THREE.CircleGeometry(0.26, 6)), deflectorHot);
-dishHex.position.z = 0.07;
+const ring1 = new THREE.Mesh(hard(new THREE.CircleGeometry(0.86, 16)), defR1);
+ring1.position.z = -0.02;
+dishGroup.add(ring1);
+const ring2 = new THREE.Mesh(hard(new THREE.CircleGeometry(0.68, 14)), defR2);
+ring2.position.z = 0.00;
+dishGroup.add(ring2);
+const ring3 = new THREE.Mesh(hard(new THREE.CircleGeometry(0.50, 12)), defR3);
+ring3.position.z = 0.02;
+dishGroup.add(ring3);
+const dishHex = new THREE.Mesh(hard(new THREE.CircleGeometry(0.30, 6)), defHex);
+dishHex.position.z = 0.04;
 dishGroup.add(dishHex);
+
+const dishLight = new THREE.PointLight(0x3ec8ff, 1.6, 5.5, 2);
+dishLight.position.set(0, 0, -0.55);
+dishGroup.add(dishLight);
 
 hull2.add(dishGroup);
 
