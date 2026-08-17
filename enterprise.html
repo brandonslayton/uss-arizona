@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USS Arizona — Low-Poly</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #020208; }
+    canvas { display: block; }
+  </style>
+  <!--
+    Visual targets (pass 3 — two critic loops):
+    - Thin cartoon saucer (not wedding-cake), dark equatorial zipper of cyan windows
+    - Low stepped bridge cake; ARIZONA lettering; two port bow registry bars
+    - Dumbbell secondary hull + huge recessed cyan hex deflector
+    - Nacelles on/above saucer plane, Constitution-V pylons, 5-slat grille, dark Bussard
+    - Toy-kit materials: low metalness, high roughness, flatShading, studio gray
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+<div id="err" style="display:none;position:fixed;inset:16px auto auto 16px;max-width:640px;padding:12px 14px;background:#2a2a2a;color:#fff;font:13px/1.4 Consolas,monospace;z-index:9;border-radius:6px;white-space:pre-wrap;"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+window.addEventListener('error', (e) => {
+  const el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent = e.message || String(e);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent = e.reason?.message || String(e.reason);
+});
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020208);
+
+// Sparse cartoon starfield
+{
+  const count = 1800;
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const r = 40 + Math.random() * 80;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    pos[i * 3 + 2] = r * Math.cos(phi);
+    const t = 0.65 + Math.random() * 0.35;
+    const cool = Math.random() > 0.85;
+    col[i * 3] = cool ? 0.7 * t : t;
+    col[i * 3 + 1] = cool ? 0.82 * t : t;
+    col[i * 3 + 2] = t;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const stars = new THREE.Points(
+    geo,
+    new THREE.PointsMaterial({
+      size: 0.18, vertexColors: true, sizeAttenuation: true,
+      transparent: true, opacity: 0.95, depthWrite: false,
+    })
+  );
+  scene.add(stars);
+}
+
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(7.2, 4.2, 9.4);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.set(0, 0.25, 0);
+controls.minDistance = 6;
+controls.maxDistance = 28;
+
+// Soft cartoon studio — less photographic rim
+scene.add(new THREE.AmbientLight(0xd0d4d8, 0.32));
+scene.add(new THREE.HemisphereLight(0xd8dde4, 0x6a7480, 0.22));
+const key = new THREE.DirectionalLight(0xfff6ee, 0.9);
+key.position.set(-6, 9, 8);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xc9d4e0, 0.42);
+fill.position.set(7, 3, 4);
+scene.add(fill);
+const rim = new THREE.DirectionalLight(0xb8c4d0, 0.11);
+rim.position.set(2, 4, -8);
+scene.add(rim);
+
+function mat(color, extra = {}) {
+  return new THREE.MeshStandardMaterial({
+    color, metalness: 0.08, roughness: 0.76, flatShading: true, ...extra,
+  });
+}
+
+const hull      = mat(0x9aa2aa, { side: THREE.DoubleSide });
+const hullDark  = mat(0x7e8892, { metalness: 0.06, roughness: 0.80, side: THREE.DoubleSide });
+const hullMid   = mat(0x9aa2aa);
+const hullDeep  = mat(0x6e747c, { metalness: 0.04, roughness: 0.82 });
+const hullInset = mat(0x4a5058, { metalness: 0.03, roughness: 0.88 });
+const domeMat   = mat(0x8e949a);
+const stripeDark= mat(0x1a1c1e, { metalness: 0.04, roughness: 0.85 });
+const redStripe = mat(0xc43c38, { metalness: 0.05, roughness: 0.7, emissive: 0x000000 });
+const lightBlue = mat(0x88ccff, {
+  metalness: 0, roughness: 0.45, emissive: 0x5aa8d4, emissiveIntensity: 0.62,
+});
+const deflectorCore = mat(0x0a1a2a, {
+  metalness: 0, roughness: 0.28, emissive: 0x00aaff, emissiveIntensity: 1.85,
+});
+const deflectorRing = mat(0x1468aa, {
+  metalness: 0.05, roughness: 0.35, emissive: 0x4aa0d0, emissiveIntensity: 1.35,
+});
+const deflectorHot = mat(0xb8e4ff, {
+  metalness: 0, roughness: 0.25, emissive: 0x8ad0ff, emissiveIntensity: 2.55,
+});
+const deflectorRim = mat(0x2a3238, { metalness: 0.08, roughness: 0.7 });
+const grillMat = mat(0x2a2e32, { metalness: 0.08, roughness: 0.7 });
+const letterMat = mat(0x1a1c1e, { metalness: 0.04, roughness: 0.85 });
+const impulseMat = mat(0xfff4d0, {
+  metalness: 0, roughness: 0.5, emissive: 0xffd089, emissiveIntensity: 1.5,
+});
+
+function hard(geo) { geo.computeVertexNormals(); return geo; }
+
+function addMesh(parent, geo, material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
+  const m = new THREE.Mesh(geo, material);
+  m.position.set(x, y, z);
+  if (rx || ry || rz) m.rotation.set(rx, ry, rz);
+  parent.add(m);
+  return m;
+}
+
+const enterprise = new THREE.Group();
+enterprise.name = 'enterprise';
+scene.add(enterprise);
+// +Z aft, −Z bow, +Y up, +X starboard
+
+// =========================== 1. SAUCER =====================================
+const saucer = new THREE.Group();
+saucer.name = 'saucer';
+const SAUCER_R = 3.55;
+
+// Solid lenticular saucer — stacked CLOSED frustums (no see-through shells)
+// Top cone: peak → rim
+addMesh(saucer, hard(new THREE.CylinderGeometry(1.15, 0.22, 0.16, 28)), hull, 0, 0.34, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(2.35, 1.15, 0.16, 28)), hull, 0, 0.18, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(SAUCER_R + 0.04, 2.35, 0.16, 28)), hull, 0, 0.02, 0);
+// Bottom cone: rim → belly (darker, more drop)
+addMesh(saucer, hard(new THREE.CylinderGeometry(SAUCER_R + 0.04, 2.55, 0.16, 28)), hullDark, 0, -0.12, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(2.55, 1.45, 0.16, 28)), hullDark, 0, -0.28, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(1.45, 0.55, 0.16, 28)), hullDark, 0, -0.44, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(0.55, 0.18, 0.10, 16)), hullDark, 0, -0.56, 0);
+// Inner plug so the cone never reads as a hollow shell
+addMesh(saucer, hard(new THREE.CylinderGeometry(2.85, 2.85, 0.36, 16)), hullMid, 0, -0.10, 0);
+
+// Dark equatorial zipper band at the thin rim
+addMesh(saucer, hard(new THREE.CylinderGeometry(SAUCER_R + 0.07, SAUCER_R + 0.07, 0.10, 28)), hullDeep, 0, -0.01, 0);
+
+// Neck socket + warm impulse stamps (hang from the lower cone)
+addMesh(saucer, hard(new THREE.CylinderGeometry(0.38, 0.48, 0.16, 10)), hullDark, 0, -0.60, 0.10);
+addMesh(saucer, new THREE.BoxGeometry(0.16, 0.04, 0.09), impulseMat, -0.12, -0.54, 0.02);
+addMesh(saucer, new THREE.BoxGeometry(0.16, 0.04, 0.09), impulseMat, 0.12, -0.54, 0.02);
+
+// Bridge sits on the cone peak
+addMesh(saucer, hard(new THREE.CylinderGeometry(0.78, 0.92, 0.04, 14)), hullInset, 0, 0.39, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(0.52, 0.70, 0.07, 12)), hullDeep, 0, 0.44, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(0.32, 0.48, 0.07, 10)), domeMat, 0, 0.50, 0);
+addMesh(saucer, hard(new THREE.CylinderGeometry(0.22, 0.28, 0.04, 10)), domeMat, 0, 0.55, 0);
+const bridgeCap = new THREE.Mesh(hard(new THREE.IcosahedronGeometry(0.17, 0)), domeMat);
+bridgeCap.position.y = 0.58;
+bridgeCap.scale.set(1, 0.62, 1);
+saucer.add(bridgeCap);
+
+// Registry bars — two long thin dashes, port of bow
+function stripeBar(x, z, w, l) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.016, l), stripeDark);
+  m.position.set(x, 0.22, z);
+  saucer.add(m);
+}
+stripeBar(-0.78, -2.62, 0.08, 0.58);
+stripeBar(-0.62, -2.62, 0.08, 0.58);
+
+// Sparse deck pips (rim ring does the talking)
+function deckLight(x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.025, 0.045), lightBlue);
+  m.position.set(x, y, z);
+  saucer.add(m);
+}
+[[-0.48, 0.32, -1.05], [0.48, 0.32, -1.05],
+ [-0.22, 0.30, -1.48], [0.22, 0.30, -1.48],
+ [-2.35, 0.16, 0], [2.35, 0.16, 0],
+ [-1.85, 0.22, 1.45], [1.85, 0.22, 1.45],
+ [-1.85, 0.22, -1.45], [1.85, 0.22, -1.45]].forEach(p => deckLight(...p));
+
+// Dense cyan zipper around the equator — no skips
+const lightCount = 76;
+for (let i = 0; i < lightCount; i++) {
+  const a = (i / lightCount) * Math.PI * 2;
+  const lx = Math.sin(a) * (SAUCER_R + 0.06);
+  const lz = Math.cos(a) * (SAUCER_R + 0.06);
+  const win = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.055, 0.04), lightBlue);
+  win.position.set(lx, -0.01, lz);
+  win.lookAt(0, -0.01, 0);
+  win.rotateY(Math.PI);
+  saucer.add(win);
+}
+
+// Block ENTERPRISE — larger, forward of center
+const FONT = {
+  A: ['01110','10001','11111','10001','10001'],
+  R: ['11110','10001','11110','10100','10010'],
+  I: ['11111','00100','00100','00100','11111'],
+  Z: ['11111','00010','00100','01000','11111'],
+  O: ['01110','10001','10001','10001','01110'],
+  N: ['10001','11001','10101','10011','10001'],
+};
+function addLetter(ch, ox, oy, oz) {
+  const g = FONT[ch];
+  if (!g) return;
+  const cw = 0.028, chh = 0.034;
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 5; c++) {
+      if (g[r][c] !== '1') continue;
+      const cell = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.022, chh), letterMat);
+      cell.position.set(ox + c * (cw + 0.004), oy, oz + r * (chh + 0.004));
+      saucer.add(cell);
+    }
+  }
+}
+const word = 'ARIZONA';
+const letterPitch = 0.20;
+let lx0 = -(word.length * letterPitch) / 2 + 0.02;
+word.split('').forEach((ch) => {
+  addLetter(ch, lx0, 0.30, -1.25);
+  lx0 += letterPitch;
+});
+
+saucer.position.set(0, 1.62, -1.85);
+enterprise.add(saucer);
+
+// =========================== 2. NECK =======================================
+const neck = new THREE.Group();
+neck.name = 'neck';
+// Diagonal connecting section: under saucer (aft of center) → down/aft into hull spine
+const neckTop = new THREE.Vector3(0, 1.16, -1.05);
+const neckBot = new THREE.Vector3(0, 0.52, 0.12);
+const neckMid = neckTop.clone().add(neckBot).multiplyScalar(0.5);
+const neckDir = neckBot.clone().sub(neckTop);
+const neckLen = neckDir.length();
+const neckBeam = new THREE.Mesh(hard(new THREE.BoxGeometry(0.78, neckLen + 0.28, 1.05)), hullDark);
+neckBeam.position.copy(neckMid);
+neckBeam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), neckDir.clone().normalize());
+neck.add(neckBeam);
+const neckFlare = new THREE.Mesh(hard(new THREE.BoxGeometry(0.98, 0.28, 1.22)), hullDeep);
+neckFlare.position.copy(neckTop.clone().lerp(neckMid, 0.22));
+neckFlare.quaternion.copy(neckBeam.quaternion);
+neck.add(neckFlare);
+const neckFoot = new THREE.Mesh(hard(new THREE.BoxGeometry(0.88, 0.24, 1.12)), hullDeep);
+neckFoot.position.copy(neckBot.clone().lerp(neckMid, 0.18));
+neckFoot.quaternion.copy(neckBeam.quaternion);
+neck.add(neckFoot);
+// Windows sit on the swept sides
+for (const t of [0.32, 0.48, 0.64]) {
+  const p = neckTop.clone().lerp(neckBot, t);
+  for (const sx of [-1, 1]) {
+    const w = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.07, 0.10), lightBlue);
+    w.position.set(sx * 0.40, p.y, p.z);
+    w.quaternion.copy(neckBeam.quaternion);
+    neck.add(w);
+  }
+}
+enterprise.add(neck);
+
+// ======================== 3. SECONDARY HULL ================================
+const hull2 = new THREE.Group();
+hull2.name = 'secondaryHull';
+
+// Dumbbell: fat nose, thinner waist, fat aft
+addMesh(hull2, hard(new THREE.CylinderGeometry(0.88, 0.98, 0.95, 12)), hullDark, 0, 0, 0.55, Math.PI / 2);
+addMesh(hull2, hard(new THREE.CylinderGeometry(0.72, 0.78, 1.25, 12)), hullDark, 0, 0, 1.62, Math.PI / 2);
+addMesh(hull2, hard(new THREE.CylinderGeometry(0.82, 0.94, 0.95, 12)), hullDark, 0, 0, 2.70, Math.PI / 2);
+const nose = new THREE.Mesh(hard(new THREE.IcosahedronGeometry(0.92, 0)), hullDark);
+nose.position.z = 0.12;
+nose.scale.set(1.08, 1.02, 0.78);
+hull2.add(nose);
+const aft = new THREE.Mesh(hard(new THREE.IcosahedronGeometry(0.78, 0)), hullDark);
+aft.position.z = 3.18;
+aft.scale.set(0.98, 0.88, 1.12);
+hull2.add(aft);
+
+// Dorsal deck
+addMesh(hull2, hard(new THREE.BoxGeometry(0.68, 0.24, 1.35)), hullMid, 0, 0.78, 1.45);
+addMesh(hull2, hard(new THREE.CylinderGeometry(0.16, 0.22, 0.10, 8)), hullDeep, 0, 0.94, 1.05);
+for (const z of [1.15, 1.28, 1.41]) {
+  addMesh(hull2, new THREE.BoxGeometry(0.08, 0.03, 0.06), lightBlue, 0, 0.91, z);
+}
+
+// Side windows
+for (let i = 0; i < 4; i++) {
+  const z = 1.25 + i * 0.28;
+  for (const sx of [-1, 1]) {
+    addMesh(hull2, new THREE.BoxGeometry(0.04, 0.07, 0.11), lightBlue, sx * 0.76, 0.10, z);
+  }
+}
+
+// Two thin red chevrons per side
+function redMark(side) {
+  for (const [dz, yaw] of [[0.62, side * 0.18], [0.78, side * 0.18]]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.055, 0.42), redStripe);
+    bar.position.set(side * 0.92, 0.10, dz);
+    bar.rotation.y = yaw;
+    hull2.add(bar);
+  }
+  const chev = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.10), redStripe);
+  chev.position.set(side * 0.90, 0.10, 0.42);
+  hull2.add(chev);
+}
+redMark(-1);
+redMark(1);
+
+// Shuttle-bay clamshell door on the stern
+addMesh(hull2, new THREE.BoxGeometry(0.78, 0.52, 0.08), hullDeep, 0, 0.02, 3.48);
+addMesh(hull2, new THREE.BoxGeometry(0.68, 0.42, 0.06), hullInset, 0, 0.02, 3.54);
+addMesh(hull2, new THREE.BoxGeometry(0.31, 0.38, 0.05), hullMid, -0.17, 0.02, 3.58);
+addMesh(hull2, new THREE.BoxGeometry(0.31, 0.38, 0.05), hullMid, 0.17, 0.02, 3.58);
+addMesh(hull2, new THREE.BoxGeometry(0.03, 0.40, 0.06), stripeDark, 0, 0.02, 3.61);
+addMesh(hull2, new THREE.BoxGeometry(0.10, 0.05, 0.04), lightBlue, -0.17, 0.12, 3.62);
+addMesh(hull2, new THREE.BoxGeometry(0.10, 0.05, 0.04), lightBlue, 0.17, 0.12, 3.62);
+
+// ---- Deflector: big recessed graphic target ----
+const dishGroup = new THREE.Group();
+dishGroup.position.set(0, 0.02, -0.38);
+
+const well = new THREE.Mesh(hard(new THREE.CylinderGeometry(0.82, 0.68, 0.24, 16, 1, true)), hullInset);
+well.rotation.x = Math.PI / 2;
+well.position.z = 0.12;
+dishGroup.add(well);
+
+dishGroup.add(new THREE.Mesh(hard(new THREE.TorusGeometry(0.78, 0.065, 6, 16)), deflectorRim));
+
+const dishOuter = new THREE.Mesh(hard(new THREE.CircleGeometry(0.70, 16)), deflectorRing);
+dishOuter.position.z = 0.02;
+dishGroup.add(dishOuter);
+
+const dishMid = new THREE.Mesh(hard(new THREE.CircleGeometry(0.42, 12)), deflectorCore);
+dishMid.position.z = 0.045;
+dishGroup.add(dishMid);
+
+const dishHex = new THREE.Mesh(hard(new THREE.CircleGeometry(0.26, 6)), deflectorHot);
+dishHex.position.z = 0.07;
+dishGroup.add(dishHex);
+
+hull2.add(dishGroup);
+
+addMesh(hull2, new THREE.BoxGeometry(0.18, 0.10, 0.26), hullInset, 0, -0.72, 2.35);
+
+hull2.position.set(0, -0.08, -0.55);
+enterprise.add(hull2);
+
+// Pylons live on the hull so they always plant into engineering
+function addPylon(side) {
+  const start = new THREE.Vector3(side * 0.58, 0.42, 1.92);
+  const nacelleWorld = new THREE.Vector3(side * 2.62, 1.70, 4.45);
+  const endLocal = nacelleWorld.clone().sub(hull2.position);
+  const mid = start.clone().add(endLocal).multiplyScalar(0.5);
+  const dir = endLocal.clone().sub(start);
+  const len = dir.length();
+  const pylon = new THREE.Mesh(hard(new THREE.BoxGeometry(0.26, len + 0.18, 0.44)), hullDeep);
+  pylon.position.copy(mid);
+  pylon.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  hull2.add(pylon);
+}
+addPylon(-1);
+addPylon(1);
+addMesh(hull2, hard(new THREE.IcosahedronGeometry(0.22, 0)), hullDeep, -0.72, 0.22, 1.95);
+addMesh(hull2, hard(new THREE.IcosahedronGeometry(0.22, 0)), hullDeep, 0.72, 0.22, 1.95);
+
+// ======================== 4. WARP NACELLES =================================
+function makeNacelle(side) {
+  const g = new THREE.Group();
+  g.name = side > 0 ? 'nacelleStarboard' : 'nacellePort';
+
+  addMesh(g, hard(new THREE.CylinderGeometry(0.34, 0.40, 4.45, 10)), hullDark, 0, 0, 0.2, Math.PI / 2);
+
+  // Cowl + glowing blue engine face (cyan like the plates), slats on top
+  const cowl = new THREE.Mesh(hard(new THREE.IcosahedronGeometry(0.46, 0)), hullDeep);
+  cowl.position.z = -2.05;
+  cowl.scale.set(1.08, 1.02, 0.82);
+  g.add(cowl);
+
+  const glowWell = new THREE.Mesh(hard(new THREE.CircleGeometry(0.30, 10)), deflectorRing);
+  glowWell.position.z = -2.38;
+  g.add(glowWell);
+  const glowCore = new THREE.Mesh(hard(new THREE.CircleGeometry(0.18, 8)), deflectorHot);
+  glowCore.position.z = -2.40;
+  g.add(glowCore);
+
+  for (let i = -2; i <= 2; i++) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.038, 0.035), hullInset);
+    slat.position.set(0, i * 0.082, -2.43);
+    g.add(slat);
+  }
+
+  addMesh(g, hard(new THREE.CylinderGeometry(0.28, 0.36, 0.32, 8)), hullDeep, 0, 0, 2.42, Math.PI / 2);
+  for (const [x, y] of [[-0.16, 0.12], [0.16, 0.12], [0, 0.20]]) {
+    addMesh(g, new THREE.BoxGeometry(0.07, 0.04, 0.05), lightBlue, x, y, 2.58);
+  }
+
+  // Inboard window strip
+  for (let i = 0; i < 7; i++) {
+    addMesh(g, new THREE.BoxGeometry(0.035, 0.055, 0.10), lightBlue, -side * 0.38, 0.05, -0.35 + i * 0.28);
+  }
+
+  // Nacelles sit aft of the saucer rim — a clear air gap, no kiss
+  g.position.set(side * 2.62, 1.70, 4.45);
+  return g;
+}
+enterprise.add(makeNacelle(-1));
+enterprise.add(makeNacelle(1));
+
+{
+  const box = new THREE.Box3().setFromObject(enterprise);
+  enterprise.position.sub(box.getCenter(new THREE.Vector3()));
+}
+
+window.enterprise = enterprise;
+window.THREE = THREE;
+window.scene = scene;
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function tick() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+</body>
+</html>
